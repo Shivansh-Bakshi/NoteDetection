@@ -1,0 +1,39 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "cppbuild",
+			"label": "C/C++: g++.exe build active file",
+			"command": "D:\\MSYS2\\mingw64\\bin\\g++.exe",
+			"args": [
+				"-g",
+				"${file}",
+				"-I",
+				"D:\\Audio_Processing\\aubio\\include",
+				"-I",
+				"D:\\Audio_Processing\\portaudio\\include",
+				"-L",
+				"D:\\Audio_Processing\\aubio\\lib",
+				"-L",
+				"D:\\Audio_Processing\\portaudio\\lib\\.libs",
+				"-l",
+				"aubio",
+				"-l",
+				"portaudio",
+				"-o",
+				"${fileDirname}\\${fileBasenameNoExtension}.exe"
+			],
+			"options": {
+				"cwd": "D:\\MSYS2\\mingw64\\bin"
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"detail": "compiler: D:\\MSYS2\\mingw64\\bin\\g++.exe"
+		}
+	]
+}
