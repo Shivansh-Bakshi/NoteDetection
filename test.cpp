@@ -7,7 +7,7 @@
 
 #define SAMPLE_RATE (44100)
 #define FRAMES_PER_BUFFER (2048)
-#define NUM_SECONDS (5)
+#define NUM_SECONDS (121)
 #define NUM_CHANNELS (1)
 #define DITHER_FLAG (0)
 
@@ -20,6 +20,27 @@ typedef short SAMPLE;
 #define HOP_SIZE (int)(FRAMES_PER_BUFFER/2)
 #define PERIOD_SIZE_IN_FRAME HOP_SIZE
 
+#define NUM_NOTES (62)
+std::string note_names[NUM_NOTES] = {  "C2", "C2#", "D2", "D2#", "E2", "F2", "F2#", "G2", "G2#", "A2", "A2#", "B2",
+                                "C3", "C3#", "D3", "D3#", "E3", "F3", "F3#", "G3", "G3#", "A3", "A3#", "B3",
+                                "C4", "C4#", "D4", "D4#", "E4", "F4", "F4#", "G4", "G4#", "A4", "A4#", "B4",
+                                "C5", "C5#", "D5", "D5#", "E5", "F5", "F5#", "G5", "G5#", "A5", "A5#", "B5",
+                                "C6", "C6#", "D6", "D6#", "E6", "F6", "F6#", "G6", "G6#", "A6", "A6#", "B6", 
+                                "C7", "C7#"};
+
+int range_low[NUM_NOTES] = {   63, 67, 72, 76, 80, 85, 90, 95, 101, 107, 113, 120,
+                        127, 135, 144, 151, 163, 171, 182, 193, 204, 217, 230, 243,
+                        259, 274, 290, 308, 329, 347, 367, 389, 413, 437, 463, 492,
+                        522, 552, 587, 620, 660, 698, 739, 783, 831, 880, 930, 987,
+                        1047, 1107, 1174, 1244, 1319, 1396, 1484, 1571, 1667, 1768, 1877, 1967,
+                        2106, 2236};
+
+int range_high[NUM_NOTES] = {  67, 71, 76, 79, 84, 89, 94, 101, 107, 113, 119, 126,
+                        134, 143, 150, 159, 167, 177, 189, 200, 212, 223, 236, 251,
+                        265, 280, 297, 314, 335, 353, 373, 395, 419, 443, 469, 498,
+                        528, 558, 593, 626, 666, 704, 745, 789, 837, 890, 940, 995,
+                        1053, 1115, 1181, 1251, 1328, 1404, 1491, 1579, 1675, 1776, 1885, 1975,
+                        2114, 2244};
 typedef struct
 {
     int frameIndex;
@@ -29,17 +50,27 @@ typedef struct
 }
 paTestData;
 
-smpl_t find_pitch(aubio_pitch_t *o, SAMPLE ibuf[], fvec_t *pitch)
+std::string find_pitch(aubio_pitch_t *o, SAMPLE ibuf[], fvec_t *pitch)
 {   
     fvec_t *input = new_fvec(FRAMES_PER_BUFFER);
+    int i;
     for(int i = 0; i < FRAMES_PER_BUFFER; i++)
     {
         input->data[i] = (smpl_t)ibuf[i];
     }
     aubio_pitch_do(o, input, pitch);
     smpl_t freq = fvec_get_sample(pitch, 0);
+    std::string det = "";
     del_fvec(input);
-    return freq;
+    for(i = 0; i < NUM_NOTES; i++)
+    {
+        if(freq > range_low[i] && freq < range_high[i])
+        {
+            det = note_names[i];
+            break;
+        }
+    }
+    return det;
 }
 
 
@@ -113,6 +144,7 @@ int main()
     aubio_pitch_t *o;
     smpl_t silence = -60.0;
     fvec_t *pitch;
+    std::string note_detected = "";
 
     std::cout<<"Testing recording"<<std::endl;
 
@@ -151,7 +183,7 @@ int main()
     aubio_pitch_set_unit(o, "Hz");
     aubio_pitch_set_silence(o, silence);
     pitch = new_fvec(1);
-    smpl_t freq_detected;
+    // smpl_t freq_detected;
 
 
     /*Record some audio -----------------------------------------------------------------------------------*/
@@ -186,10 +218,10 @@ int main()
             sum += val;
         }
         average = sum / (float)(FRAMES_PER_BUFFER*NUM_CHANNELS);
-        freq_detected = find_pitch(o,data.frameData, pitch);
+        note_detected = find_pitch(o,data.frameData, pitch);
         peak = 100*average/pow(2.0, 16.0);
         std::string bars(peak, '#');
-        std::cout << freq_detected << "\t" << bars << std::endl;
+        std::cout << note_detected << "\t" << bars << std::endl;
     }
     if(err < 0){
         goto done;
