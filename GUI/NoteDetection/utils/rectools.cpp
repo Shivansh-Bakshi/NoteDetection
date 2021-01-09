@@ -1,8 +1,19 @@
 #include "rectools.h"
-#include "ui_detectormain.h"
-#include <string>
 #include <math.h>
 #include <QTextStream>
+#include <chrono>
+
+#include "boost/accumulators/accumulators.hpp"
+#include "boost/accumulators/statistics.hpp"
+#include "boost/accumulators/statistics/rolling_mean.hpp"
+
+namespace ba = boost::accumulators;
+namespace bt = ba::tag;
+
+typedef ba::accumulator_set <smpl_t, ba::stats <bt::rolling_mean>> MeanAccumulator;
+typedef std::chrono::steady_clock Clock;
+
+MeanAccumulator acc(bt::rolling_window::window_size = WINDOW_SIZE);
 
 std::string note_names[NUM_NOTES] = {  "C2", "C2#", "D2", "D2#", "E2", "F2", "F2#", "G2", "G2#", "A2", "A2#", "B2",
                                 "C3", "C3#", "D3", "D3#", "E3", "F3", "F3#", "G3", "G3#", "A3", "A3#", "B3",
@@ -24,6 +35,9 @@ int range_high[NUM_NOTES] = {  67, 71, 76, 79, 84, 89, 94, 101, 107, 113, 119, 1
                         528, 558, 593, 626, 666, 704, 745, 789, 837, 890, 940, 995,
                         1053, 1115, 1181, 1251, 1328, 1404, 1491, 1579, 1675, 1776, 1885, 1975,
                         2114, 2244};
+
+
+int isRecording = paContinue;
 
 struct paTestData
 {
@@ -48,11 +62,13 @@ std::string find_pitch(aubio_pitch_t *o, SAMPLE ibuf[], fvec_t *pitch)
     }
     aubio_pitch_do(o, input, pitch);
     smpl_t freq = fvec_get_sample(pitch, 0);
+    acc(freq);
+    smpl_t meanFreq = ba::rolling_mean(acc);
     std::string det = "";
     del_fvec(input);
     for(i = 0; i < NUM_NOTES; i++)
     {
-        if(freq > range_low[i] && freq < range_high[i])
+        if(meanFreq > range_low[i] && meanFreq < range_high[i])
         {
             det = note_names[i];
             break;
@@ -67,44 +83,41 @@ static int recordCallback( const void *inputBuffer, void *outputBuffer,
                            PaStreamCallbackFlags statusFlags,
                            void *userData)
 {
-   paTestData *data = (paTestData*)userData;
-   const SAMPLE *rptr = (const SAMPLE*)inputBuffer;
-   long framesToCalc;
-   long i;
-   int finished;
+    paTestData *data = (paTestData*)userData;
+    const SAMPLE *rptr = (const SAMPLE*)inputBuffer;
+    long framesToCalc = framesPerBuffer;
+    long i;
+    int finished = isRecording;
 
-   (void) outputBuffer;
-   (void) timeInfo;
-   (void) statusFlags;
-   (void) userData;
+    (void) outputBuffer;
+    (void) timeInfo;
+    (void) statusFlags;
+    (void) userData;
 
-
-   framesToCalc = framesPerBuffer;
-   finished = paContinue;
-
-
-   if(inputBuffer == NULL)
-   {
-       for(i = 0; i < framesToCalc; i++)
-       {
-           data->frameData[i*NUM_CHANNELS] = SAMPLE_SILENCE;
-           if(NUM_CHANNELS == 2) data->frameData[i*NUM_CHANNELS + 1] = SAMPLE_SILENCE;
-       }
-   }
-   else
-   {
-       for(i = 0; i < framesToCalc; i++)
-       {
-           data->frameData[i*NUM_CHANNELS] = *rptr++;
-           if(NUM_CHANNELS == 2) data->frameData[i*NUM_CHANNELS + 1] = *rptr++;
-       }
-   }
-   return finished;
+    if(inputBuffer == NULL)
+    {
+        for(i = 0; i < framesToCalc; i++)
+        {
+            data->frameData[i*NUM_CHANNELS] = SAMPLE_SILENCE;
+            if(NUM_CHANNELS == 2) data->frameData[i*NUM_CHANNELS + 1] = SAMPLE_SILENCE;
+        }
+    }
+    else
+    {
+        for(i = 0; i < framesToCalc; i++)
+        {
+            data->frameData[i*NUM_CHANNELS] = *rptr++;
+            if(NUM_CHANNELS == 2) data->frameData[i*NUM_CHANNELS + 1] = *rptr++;
+        }
+    }
+    return finished;
 }
 
 int Recorder::begin_recording()
 {
+    isRecording = paContinue;
     PaStreamParameters  inputParameters;
+    PaStream* stream;
     PaError err = paNoError;
     paTestData data;
     int i;
@@ -113,10 +126,14 @@ int Recorder::begin_recording()
     int peak;
     float average;
 
-    aubio_pitch_t *o = NULL;
+    aubio_pitch_t *o;
     smpl_t silence = -60.0;
-    fvec_t *pitch = NULL;
+    fvec_t *pitch;
     std::string note_detected = "";
+
+    constexpr const std::chrono::milliseconds maxTime(100);
+
+    auto t1 = Clock::now();
 
 
     /*Initialize portaudio object -------------------------------------------------------------------------*/
@@ -127,6 +144,7 @@ int Recorder::begin_recording()
     inputParameters.device = Pa_GetDefaultInputDevice();
     if(inputParameters.device == paNoDevice)
     {
+        QTextStream(stdout) << "Error: No default input device.\n";
         goto done;
     }
     inputParameters.channelCount = NUM_CHANNELS;
@@ -139,9 +157,7 @@ int Recorder::begin_recording()
     aubio_pitch_set_unit(o, "Hz");
     aubio_pitch_set_silence(o, silence);
     pitch = new_fvec(1);
-    // smpl_t freq_detected;
 
-    QTextStream(stdout) << "Starting recording! Speak into microphone!\n";
     /*Record some audio -----------------------------------------------------------------------------------*/
     err  = Pa_OpenStream(   &stream,
                             &inputParameters,
@@ -161,17 +177,18 @@ int Recorder::begin_recording()
         goto done;
     }
 
+    QTextStream(stdout)<<"\nNow Recording! Please speak into the microphone.\n";
+
     while((err = Pa_IsStreamActive(stream)) == 1)
     {
-        Pa_Sleep(10);
+        auto t2 = Clock::now();
         sum = 0;
         for(i = 0; i < FRAMES_PER_BUFFER*NUM_CHANNELS; i++)
         {
             val = data.frameData[i];
             if(val < 0) val = -val;
-            sum += val;
+                sum += val;
         }
-        average = sum / (float)(FRAMES_PER_BUFFER*NUM_CHANNELS);
         peak = 100*average/pow(2.0, 16.0);
         if(peak != 0)
         {
@@ -179,56 +196,48 @@ int Recorder::begin_recording()
         }
         else
         {
-            note_detected = "~";
+            note_detected = "";
         }
-        std::string bars_det(peak, '#');
-        emit UpdateNote(note_detected);
-        emit UpdateBars(bars_det);
+        average = sum / (float)(FRAMES_PER_BUFFER*NUM_CHANNELS);
+        auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1);
+        if(elapsedTime > maxTime)
+        {
+            std::string bars(peak, '#');
+            emit UpdateNote(note_detected);
+            t1 = Clock::now();
+        }
+
     }
-    if(err < 0 && err != -9988){
-        QTextStream(stdout) << "Error checking stream active\n";
+    if(err < 0){
         goto done;
     }
-    else if(err == -9988)
-    {
-        QTextStream(stdout) << "Stream Stopped!\n";
-    }
 
-    QTextStream(stdout) << "Done! ";
-    done:
-        Pa_Terminate();
-        del_aubio_pitch(o);
-        del_fvec(pitch);
-
-        if(err != paNoError && err != -9988)
-        {
-            QTextStream(stdout) << "Error Occured in begin recording\n";
-            QTextStream(stdout) << "Error Number: " << QString::number(err) << "\n";
-            QTextStream(stdout) << "Error Message = " << Pa_GetErrorText(err);
-            err = 1;
-        }
-        return err;
-}
-
-int Recorder::stop_recording()
-{
-    PaError err = paNoError;
-    err = Pa_AbortStream(stream);
     err = Pa_CloseStream(stream);
     if(err != paNoError){
         goto done;
     }
 
-    QTextStream(stdout) << "Closed Stream!";
+    QTextStream(stdout)<<"Done!\n";
+
     done:
-    if(err != paNoError)
-    {
-        QTextStream(stdout) << "Error Occured in stop recording\n";
-        QTextStream(stdout) << "Error Number: " << QString::number(err) << "\n";
-        QTextStream(stdout) << "Error Message = " << Pa_GetErrorText(err);
-        err = 1;
-    }
-    return err;
+        Pa_Terminate();
+        del_aubio_pitch(o);
+        del_fvec(pitch);
+
+        if(err != paNoError)
+        {
+            QTextStream(stdout) << "An error occured while using the portaudio stream\n";
+            QTextStream(stdout) << "Error Number: " << err << "\n";
+            QTextStream(stdout) << "Error Message: "<< Pa_GetErrorText(err) << '\n';
+            err = 1;
+
+        }
+        return err;
+}
+
+void Recorder::stop_recording()
+{
+    isRecording = paComplete;
 }
 
 int Recorder::get_device_count()

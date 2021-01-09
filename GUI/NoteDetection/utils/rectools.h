@@ -10,6 +10,7 @@
 #define SAMPLE_RATE (44100)
 #define FRAMES_PER_BUFFER (2048)
 #define NUM_CHANNELS (1)
+#define NUM_SECONDS (10)
 #define DITHER_FLAG (0)
 
 #define PA_SAMPLE_TYPE paInt16
@@ -21,15 +22,11 @@ typedef short SAMPLE;
 #define HOP_SIZE (int)(FRAMES_PER_BUFFER/2)
 #define PERIOD_SIZE_IN_FRAME HOP_SIZE
 
-#define NUM_NOTES (62)
+#define NUM_NOTES (62)          // For Classification
+
+#define WINDOW_SIZE (10)        // For rolling mean
 
 typedef struct paTestData paTestData;
-
-//int begin_recording();
-
-//int get_device_count();
-
-//PaDeviceInfo get_device_info(int numDevice);
 
 class Recorder : public QObject
 {
@@ -40,7 +37,7 @@ public:
     ~Recorder();
     int get_device_count();
     PaDeviceInfo get_device_info(int numDevice);
-    int stop_recording();
+    void stop_recording();
 
 public slots:
     int begin_recording();
@@ -48,10 +45,10 @@ public slots:
 
 signals:
     void UpdateNote(std::string note);
-    void UpdateBars(std::string bar);
 
 private:
-    PaStream* stream;
+//    PaStream* stream;
+
 
 };
 
