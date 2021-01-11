@@ -9,7 +9,7 @@
 
 #define SAMPLE_RATE (44100)
 #define FRAMES_PER_BUFFER (2048)
-#define NUM_CHANNELS (1)
+#define NUM_CHANNELS (2)
 #define NUM_SECONDS (10)
 #define DITHER_FLAG (0)
 
@@ -40,7 +40,7 @@ public:
     void stop_recording();
 
 public slots:
-    int begin_recording();
+    int begin_recording(int deviceID);
 
 
 signals:

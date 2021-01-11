@@ -1,16 +1,27 @@
 #include "detectormain.h"
 #include "ui_detectormain.h"
-
+#include <QTextStream>
 
 detectorMain::detectorMain(QPointer<Recorder> recorder, QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::detectorMain)
 {
     ui->setupUi(this);
+
     rec = recorder;
 
     ui->beginRecordingButton->setEnabled(true);
     ui->stopRecordingButton->setEnabled(false);
+
+    deviceCount = rec->get_device_count();
+
+    for(int i = 0; i < deviceCount; i++)
+    {
+        PaDeviceInfo di = rec->get_device_info(i);
+        if(di.maxInputChannels == 0)
+            continue;
+        ui->inputDevicesComboBox->addItem(di.name);
+    }
 
     connect(recorder, SIGNAL(UpdateNote(std::string)), this, SLOT(updateNote(std::string)));
 
@@ -22,22 +33,13 @@ detectorMain::~detectorMain()
 }
 
 
-
-void detectorMain::on_GetDeviceCountButton_clicked()
-{
-    int dev_count = 0;
-    dev_count = rec->get_device_count();
-//    dev_count = Recorder.get_device_count();
-    ui->DeviceCountLabel->setText(QString::number(dev_count));
-}
-
 void detectorMain::on_beginRecordingButton_clicked()
 {
     int br;
     ui->beginRecordingButton->setEnabled(false);
-    ui->GetDeviceCountButton->setEnabled(false);
+    ui->chooseInputDeviceButton->setEnabled(false);
     ui->stopRecordingButton->setEnabled(true);
-    br = rec->begin_recording();
+    br = rec->begin_recording(inputDeviceID);
     if(br != paNoError)
     {
         QTextStream(stdout) << "Some Error Occured";
@@ -58,7 +60,13 @@ void detectorMain::on_stopRecordingButton_clicked()
 
     ui->stopRecordingButton->setEnabled(false);
     ui->beginRecordingButton->setEnabled(true);
-    ui->GetDeviceCountButton->setEnabled(true);
+    ui->chooseInputDeviceButton->setEnabled(true);
 
     ui->noteLabel->setText("Done");
+}
+
+void detectorMain::on_chooseInputDeviceButton_clicked()
+{
+//    QTextStream(stdout) << ui->inputDevicesComboBox->currentIndex();
+    inputDeviceID = ui->inputDevicesComboBox->currentIndex();
 }

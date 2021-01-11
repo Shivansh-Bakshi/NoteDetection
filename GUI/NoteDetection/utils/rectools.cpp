@@ -22,19 +22,19 @@ std::string note_names[NUM_NOTES] = {  "C2", "C2#", "D2", "D2#", "E2", "F2", "F2
                                 "C6", "C6#", "D6", "D6#", "E6", "F6", "F6#", "G6", "G6#", "A6", "A6#", "B6",
                                 "C7", "C7#"};
 
-int range_low[NUM_NOTES] = {   63, 67, 72, 76, 80, 85, 90, 95, 101, 107, 113, 120,
-                        127, 135, 144, 151, 163, 171, 182, 193, 204, 217, 230, 243,
-                        259, 274, 290, 308, 329, 347, 367, 389, 413, 437, 463, 492,
-                        522, 552, 587, 620, 660, 698, 739, 783, 831, 880, 930, 987,
-                        1047, 1107, 1174, 1244, 1319, 1396, 1484, 1571, 1667, 1768, 1877, 1967,
-                        2106, 2236};
+int range_low[NUM_NOTES] = {   63, 67, 71, 75, 80, 85, 90, 95, 101, 107, 113, 120,
+                        127, 134, 142, 151, 160, 170, 180, 190, 202, 215, 228, 241,
+                        256, 272, 287, 306, 323, 344, 364, 387, 411, 435, 461, 488,
+                        518, 551, 583, 618, 654, 693, 734, 778, 825, 875, 928, 982,
+                        1041, 1103, 1169, 1239, 1313, 1391, 1474, 1562, 1656, 1755, 1859, 1970,
+                        2088, 2207};
 
-int range_high[NUM_NOTES] = {  67, 71, 76, 79, 84, 89, 94, 101, 107, 113, 119, 126,
-                        134, 143, 150, 159, 167, 177, 189, 200, 212, 223, 236, 251,
-                        265, 280, 297, 314, 335, 353, 373, 395, 419, 443, 469, 498,
-                        528, 558, 593, 626, 666, 704, 745, 789, 837, 890, 940, 995,
-                        1053, 1115, 1181, 1251, 1328, 1404, 1491, 1579, 1675, 1776, 1885, 1975,
-                        2114, 2244};
+int range_high[NUM_NOTES] = {  67, 71, 75, 79, 84, 89, 94, 101, 107, 113, 119, 126,
+                        134, 142, 150, 159, 168, 178, 190, 200, 212, 225, 238, 251,
+                        266, 282, 298, 314, 335, 353, 374, 397, 419, 445, 471, 498,
+                        528, 558, 593, 626, 664, 703, 744, 788, 835, 885, 937, 992,
+                        1051, 1113, 1179, 1249, 1323, 1401, 1484, 1572, 1666, 1765, 1869, 1980,
+                        2098, 2227};
 
 
 int isRecording = paContinue;
@@ -58,7 +58,14 @@ std::string find_pitch(aubio_pitch_t *o, SAMPLE ibuf[], fvec_t *pitch)
     int i;
     for(int i = 0; i < FRAMES_PER_BUFFER; i++)
     {
-        input->data[i] = (smpl_t)ibuf[i];
+        if(NUM_CHANNELS==2)
+        {
+            smpl_t mid;
+            mid = (ibuf[i*NUM_CHANNELS] + ibuf[i*NUM_CHANNELS+1])/2;
+            input->data[i] = mid;
+        }
+        else
+            input->data[i] = (smpl_t)ibuf[i];
     }
     aubio_pitch_do(o, input, pitch);
     smpl_t freq = fvec_get_sample(pitch, 0);
@@ -113,7 +120,7 @@ static int recordCallback( const void *inputBuffer, void *outputBuffer,
     return finished;
 }
 
-int Recorder::begin_recording()
+int Recorder::begin_recording(int deviceID)
 {
     isRecording = paContinue;
     PaStreamParameters  inputParameters;
@@ -122,7 +129,7 @@ int Recorder::begin_recording()
     paTestData data;
     int i;
     SAMPLE val;
-    long sum;
+    int sum;
     int peak;
     float average;
 
@@ -135,18 +142,26 @@ int Recorder::begin_recording()
 
     auto t1 = Clock::now();
 
-
     /*Initialize portaudio object -------------------------------------------------------------------------*/
     err = Pa_Initialize();
     if( err != paNoError)
         goto done;
 
-    inputParameters.device = Pa_GetDefaultInputDevice();
+    if(deviceID == -1)
+    {
+        inputParameters.device = Pa_GetDefaultInputDevice();
+    }
+    else
+    {
+        inputParameters.device = deviceID;
+    }
+
     if(inputParameters.device == paNoDevice)
     {
         QTextStream(stdout) << "Error: No default input device.\n";
         goto done;
     }
+    QTextStream(stdout) << "Using Device : " << Pa_GetDeviceInfo(inputParameters.device)->name << "\n";
     inputParameters.channelCount = NUM_CHANNELS;
     inputParameters.sampleFormat = PA_SAMPLE_TYPE;
     inputParameters.suggestedLatency = Pa_GetDeviceInfo(inputParameters.device)->defaultLowInputLatency;
@@ -189,7 +204,8 @@ int Recorder::begin_recording()
             if(val < 0) val = -val;
                 sum += val;
         }
-        peak = 100*average/pow(2.0, 16.0);
+        average = sum / (float)(FRAMES_PER_BUFFER*NUM_CHANNELS);
+        peak = 100*average/pow(2.0, 14.0);
         if(peak != 0)
         {
             note_detected = find_pitch(o,data.frameData, pitch);
@@ -198,11 +214,10 @@ int Recorder::begin_recording()
         {
             note_detected = "";
         }
-        average = sum / (float)(FRAMES_PER_BUFFER*NUM_CHANNELS);
+
         auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1);
         if(elapsedTime > maxTime)
         {
-            std::string bars(peak, '#');
             emit UpdateNote(note_detected);
             t1 = Clock::now();
         }
@@ -271,8 +286,15 @@ PaDeviceInfo Recorder::get_device_info(int numDevice)
         goto error;
     }
 
+
     deviceInfo = Pa_GetDeviceInfo(numDevice);
     dev_info.name = deviceInfo->name;
+    if(numDevice == Pa_GetDefaultInputDevice())
+    {
+        std::string name = "[ Default ]";
+        name += dev_info.name;
+        dev_info.name = name.c_str();
+    }
     dev_info.maxInputChannels = deviceInfo->maxInputChannels;
     dev_info.maxOutputChannels = deviceInfo->maxOutputChannels;
     dev_info.defaultLowInputLatency = deviceInfo->defaultLowInputLatency;

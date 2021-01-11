@@ -21,7 +21,6 @@ public:
 
 
 private slots:
-    void on_GetDeviceCountButton_clicked();
 
     void on_beginRecordingButton_clicked();
 
@@ -29,9 +28,13 @@ private slots:
 
     void on_stopRecordingButton_clicked();
 
+    void on_chooseInputDeviceButton_clicked();
+
 private:
     Ui::detectorMain *ui;
     QPointer<Recorder> rec;
+    int deviceCount = 0;
+    int inputDeviceID = -1;
 
 };
 #endif // DETECTORMAIN_H
