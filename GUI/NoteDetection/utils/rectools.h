@@ -8,9 +8,8 @@
 #include "ui_detectormain.h"
 
 #define SAMPLE_RATE (44100)
-#define FRAMES_PER_BUFFER (2048)
+#define FRAMES_PER_BUFFER (4096)
 #define NUM_CHANNELS (2)
-#define NUM_SECONDS (10)
 #define DITHER_FLAG (0)
 
 #define PA_SAMPLE_TYPE paInt16
@@ -24,7 +23,7 @@ typedef short SAMPLE;
 
 #define NUM_NOTES (62)          // For Classification
 
-#define WINDOW_SIZE (10)        // For rolling mean
+#define WINDOW_SIZE (15)        // For rolling mean
 
 typedef struct paTestData paTestData;
 
@@ -47,7 +46,6 @@ signals:
     void UpdateNote(std::string note);
 
 private:
-//    PaStream* stream;
 
 
 };

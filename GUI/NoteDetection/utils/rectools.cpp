@@ -15,26 +15,26 @@ typedef std::chrono::steady_clock Clock;
 
 MeanAccumulator acc(bt::rolling_window::window_size = WINDOW_SIZE);
 
-std::string note_names[NUM_NOTES] = {  "C2", "C2#", "D2", "D2#", "E2", "F2", "F2#", "G2", "G2#", "A2", "A2#", "B2",
-                                "C3", "C3#", "D3", "D3#", "E3", "F3", "F3#", "G3", "G3#", "A3", "A3#", "B3",
-                                "C4", "C4#", "D4", "D4#", "E4", "F4", "F4#", "G4", "G4#", "A4", "A4#", "B4",
-                                "C5", "C5#", "D5", "D5#", "E5", "F5", "F5#", "G5", "G5#", "A5", "A5#", "B5",
-                                "C6", "C6#", "D6", "D6#", "E6", "F6", "F6#", "G6", "G6#", "A6", "A6#", "B6",
-                                "C7", "C7#"};
+std::string note_names[NUM_NOTES] = {   "C2", "C2#", "D2", "D2#", "E2", "F2", "F2#", "G2", "G2#", "A2", "A2#", "B2",
+                                        "C3", "C3#", "D3", "D3#", "E3", "F3", "F3#", "G3", "G3#", "A3", "A3#", "B3",
+                                        "C4", "C4#", "D4", "D4#", "E4", "F4", "F4#", "G4", "G4#", "A4", "A4#", "B4",
+                                        "C5", "C5#", "D5", "D5#", "E5", "F5", "F5#", "G5", "G5#", "A5", "A5#", "B5",
+                                        "C6", "C6#", "D6", "D6#", "E6", "F6", "F6#", "G6", "G6#", "A6", "A6#", "B6",
+                                        "C7", "C7#"};
 
-int range_low[NUM_NOTES] = {   63, 67, 71, 75, 80, 85, 90, 95, 101, 107, 113, 120,
-                        127, 134, 142, 151, 160, 170, 180, 190, 202, 215, 228, 241,
-                        256, 272, 287, 306, 323, 344, 364, 387, 411, 435, 461, 488,
-                        518, 551, 583, 618, 654, 693, 734, 778, 825, 875, 928, 982,
-                        1041, 1103, 1169, 1239, 1313, 1391, 1474, 1562, 1656, 1755, 1859, 1970,
-                        2088, 2207};
+int range_low[NUM_NOTES] = {    63, 67, 71, 75, 80, 85, 90, 95, 101, 107, 113, 120,
+                                127, 134, 142, 151, 160, 170, 180, 190, 202, 215, 228, 241,
+                                256, 272, 287, 306, 323, 344, 364, 387, 411, 435, 461, 488,
+                                518, 551, 583, 618, 654, 693, 734, 778, 825, 875, 928, 982,
+                                1041, 1103, 1169, 1239, 1313, 1391, 1474, 1562, 1656, 1755, 1859, 1970,
+                                2088, 2207};
 
-int range_high[NUM_NOTES] = {  67, 71, 75, 79, 84, 89, 94, 101, 107, 113, 119, 126,
-                        134, 142, 150, 159, 168, 178, 190, 200, 212, 225, 238, 251,
-                        266, 282, 298, 314, 335, 353, 374, 397, 419, 445, 471, 498,
-                        528, 558, 593, 626, 664, 703, 744, 788, 835, 885, 937, 992,
-                        1051, 1113, 1179, 1249, 1323, 1401, 1484, 1572, 1666, 1765, 1869, 1980,
-                        2098, 2227};
+int range_high[NUM_NOTES] = {   67, 71, 75, 79, 84, 89, 94, 101, 107, 113, 119, 126,
+                                134, 142, 150, 159, 168, 178, 190, 200, 212, 225, 238, 251,
+                                266, 282, 298, 314, 335, 353, 374, 397, 419, 445, 471, 498,
+                                528, 558, 593, 626, 664, 703, 744, 788, 835, 885, 937, 992,
+                                1051, 1113, 1179, 1249, 1323, 1401, 1484, 1572, 1666, 1765, 1869, 1980,
+                                2098, 2227};
 
 
 int isRecording = paContinue;
@@ -132,13 +132,15 @@ int Recorder::begin_recording(int deviceID)
     int sum;
     int peak;
     float average;
+    float confidence = 0;
+    std::string prev_note = "";
 
     aubio_pitch_t *o;
     smpl_t silence = -60.0;
     fvec_t *pitch;
     std::string note_detected = "";
 
-    constexpr const std::chrono::milliseconds maxTime(100);
+    constexpr const std::chrono::milliseconds maxTime(10);
 
     auto t1 = Clock::now();
 
@@ -209,19 +211,30 @@ int Recorder::begin_recording(int deviceID)
         if(peak != 0)
         {
             note_detected = find_pitch(o,data.frameData, pitch);
+            if(note_detected == prev_note)
+                confidence += 0.0005;
+            else
+                confidence = 0;
         }
         else
         {
             note_detected = "";
+            if(note_detected == prev_note)
+                confidence += 0.0005;
+            else
+                confidence = 0;
         }
 
         auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1);
         if(elapsedTime > maxTime)
         {
-            emit UpdateNote(note_detected);
+            if(confidence > 0.9)
+                emit UpdateNote(note_detected);
+//            QTextStream(stdout) << "Note: " << QString::fromStdString(note_detected);
+//            QTextStream(stdout) << " Confidence: " << confidence << "\n";
             t1 = Clock::now();
         }
-
+        prev_note = note_detected;
     }
     if(err < 0){
         goto done;
