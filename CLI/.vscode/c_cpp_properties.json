@@ -4,8 +4,7 @@
             "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/**",
-                "D:\\Audio_Processing\\aubio\\include",
-                "D:\\Audio_Processing\\portaudio\\include"
+                "D:\\cppLibraries\\boost_1_75_0"
             ],
             "defines": [
                 "_DEBUG",
