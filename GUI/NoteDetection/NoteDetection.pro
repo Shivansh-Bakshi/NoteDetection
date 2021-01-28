@@ -20,14 +20,18 @@ HEADERS += \
 FORMS += \
     detectormain.ui
 
-INCLUDEPATH += $$PWD/aubio/include
-INCLUDEPATH += $$PWD/portaudio/include
+INCLUDEPATH += $$PWD/utils/aubio/include
+INCLUDEPATH += $$PWD/utils/portaudio/include
+INCLUDEPATH += $$PWD/utils/midifile/include
+INCLUDEPATH += "D:/cppLibraries/boost_1_75_0"
 
-LIBS += -L$$PWD/aubio/lib
-LIBS += -L$$PWD/portaudio/lib/.libs
+LIBS += -L$$PWD/utils/aubio/lib
+LIBS += -L$$PWD/utils/portaudio/lib/.libs
+LIBS += -L$$PWD/utils/midifile/lib
 
 LIBS += -laubio
 LIBS += -lportaudio
+LIBS += -lmidifile
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

@@ -15,6 +15,8 @@ typedef std::chrono::steady_clock Clock;
 
 MeanAccumulator acc(bt::rolling_window::window_size = WINDOW_SIZE);
 
+void generate_midi(std::vector<std::pair<int, unsigned int>>& midi_notes);
+
 std::string note_names[NUM_NOTES] = {   "C2", "C2#", "D2", "D2#", "E2", "F2", "F2#", "G2", "G2#", "A2", "A2#", "B2",
                                         "C3", "C3#", "D3", "D3#", "E3", "F3", "F3#", "G3", "G3#", "A3", "A3#", "B3",
                                         "C4", "C4#", "D4", "D4#", "E4", "F4", "F4#", "G4", "G4#", "A4", "A4#", "B4",
@@ -52,7 +54,7 @@ Recorder::~Recorder(){
 //    Destructor
 }
 
-std::string find_pitch(aubio_pitch_t *o, SAMPLE ibuf[], fvec_t *pitch)
+int find_pitch(aubio_pitch_t *o, SAMPLE ibuf[], fvec_t *pitch)
 {
     fvec_t *input = new_fvec(FRAMES_PER_BUFFER);
     int i;
@@ -81,7 +83,9 @@ std::string find_pitch(aubio_pitch_t *o, SAMPLE ibuf[], fvec_t *pitch)
             break;
         }
     }
-    return det;
+    if(i == NUM_NOTES)
+        i = -1;
+    return i;
 }
 
 static int recordCallback( const void *inputBuffer, void *outputBuffer,
@@ -120,7 +124,7 @@ static int recordCallback( const void *inputBuffer, void *outputBuffer,
     return finished;
 }
 
-int Recorder::begin_recording(int deviceID)
+int Recorder::begin_recording(int deviceID, bool generateMidi = false)
 {
     isRecording = paContinue;
     PaStreamParameters  inputParameters;
@@ -133,14 +137,18 @@ int Recorder::begin_recording(int deviceID)
     int peak;
     float average;
     float confidence = 0;
-    std::string prev_note = "";
+    int prev_note = -1;
+    int prev_note_final = -1;
+    int std_durations[4] = {WHOLE_NOTE_DURATION, HALF_NOTE_DURATION, QUARTER_NOTE_DURATION, EIGHTH_NOTE_DURATION};
 
     aubio_pitch_t *o;
     smpl_t silence = -60.0;
     fvec_t *pitch;
-    std::string note_detected = "";
+    int note_detected = -1;
+    auto durStart = Clock::now();
+    auto durEnd = Clock::now();
 
-    constexpr const std::chrono::milliseconds maxTime(10);
+    constexpr const std::chrono::milliseconds maxTime(MAXTIME);
 
     auto t1 = Clock::now();
 
@@ -196,6 +204,7 @@ int Recorder::begin_recording(int deviceID)
 
     QTextStream(stdout)<<"\nNow Recording! Please speak into the microphone.\n";
 
+    durStart = Clock::now();
     while((err = Pa_IsStreamActive(stream)) == 1)
     {
         auto t2 = Clock::now();
@@ -211,27 +220,39 @@ int Recorder::begin_recording(int deviceID)
         if(peak != 0)
         {
             note_detected = find_pitch(o,data.frameData, pitch);
-            if(note_detected == prev_note)
-                confidence += 0.0005;
-            else
-                confidence = 0;
         }
         else
         {
-            note_detected = "";
-            if(note_detected == prev_note)
-                confidence += 0.0005;
-            else
-                confidence = 0;
+            note_detected = -1;
         }
-
+        if(note_detected == prev_note)
+            confidence += 0.0005;
+        else
+            confidence = 0;
         auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1);
         if(elapsedTime > maxTime)
         {
-            if(confidence > 0.9)
-                emit UpdateNote(note_detected);
-//            QTextStream(stdout) << "Note: " << QString::fromStdString(note_detected);
-//            QTextStream(stdout) << " Confidence: " << confidence << "\n";
+            if(confidence > CONFIDENCE_THRESH)
+            {
+                if(note_detected != prev_note_final)
+                {
+                    int distances[4] = {0, 0, 0, 0};
+                    int smallest = 0;
+                    durEnd = Clock::now();
+                    unsigned int duration = std::chrono::duration_cast<std::chrono::milliseconds>(durEnd - durStart).count();
+                    for (int j = 0; j < 4; j++)
+                    {
+                        distances[j] = std::abs(std_durations[j] - int(duration));
+                        if(distances[j] < distances[smallest])
+                        smallest = j;
+                    }
+                    if(generateMidi)
+                        midi_notes.push_back(std::make_pair(prev_note_final, std_durations[smallest]));
+                    emit UpdateNote(note_detected);
+                    prev_note_final = note_detected;
+                    durStart = Clock::now();
+                }
+            }
             t1 = Clock::now();
         }
         prev_note = note_detected;
@@ -258,8 +279,14 @@ int Recorder::begin_recording(int deviceID)
             QTextStream(stdout) << "Error Number: " << err << "\n";
             QTextStream(stdout) << "Error Message: "<< Pa_GetErrorText(err) << '\n';
             err = 1;
-
         }
+
+        if(generateMidi)
+        {
+            QTextStream(stdout)<<"Generating Midi\n";
+            generate_midi(midi_notes);
+        }
+
         return err;
 }
 
@@ -324,4 +351,31 @@ PaDeviceInfo Recorder::get_device_info(int numDevice)
     return dev_info;
 }
 
+void generate_midi(std::vector<std::pair<int, unsigned int>>& midi_notes)
+{
+    smf::MidiFile midifile;
+    int track = 0;
+    int channel = 0;
+    int instrument = 0;
+    midifile.addTimbre(track, 0, channel, instrument);
+    int starttick;
+    int endtick = 0;
+    for(const auto& i: midi_notes)
+    {
+        starttick = endtick;
+        endtick = starttick + int(BPM*i.second/500);
+        if(i.first != -1)
+        {
+            midifile.addNoteOn(track, starttick, channel, i.first + MIDI_KEY_OFFSET, 60);
+            midifile.addNoteOff(track, endtick, channel, i.first + MIDI_KEY_OFFSET);
+        }
+    }
+    midifile.sortTracks();
+    midifile.write("testing.mid");
+}
+
+//std::vector<std::pair<int, unsigned int>> Recorder::get_midi_notes()
+//{
+//    return midi_notes;
+//}
 

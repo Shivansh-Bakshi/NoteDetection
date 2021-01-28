@@ -24,7 +24,7 @@ private slots:
 
     void on_beginRecordingButton_clicked();
 
-    void updateNote(std::string);
+    void updateNote(int);
 
     void on_stopRecordingButton_clicked();
 
@@ -35,6 +35,8 @@ private:
     QPointer<Recorder> rec;
     int deviceCount = 0;
     int inputDeviceID = -1;
+//    std::string filename = "isabella.mid";
+//    std::vector<std::pair<int, unsigned int>> midi_notes;
 
 };
 #endif // DETECTORMAIN_H

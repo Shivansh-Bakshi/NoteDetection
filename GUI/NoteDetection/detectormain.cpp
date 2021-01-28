@@ -23,7 +23,7 @@ detectorMain::detectorMain(QPointer<Recorder> recorder, QWidget *parent)
         ui->inputDevicesComboBox->addItem(di.name);
     }
 
-    connect(recorder, SIGNAL(UpdateNote(std::string)), this, SLOT(updateNote(std::string)));
+    connect(recorder, SIGNAL(UpdateNote(int)), this, SLOT(updateNote(int)));
 
 }
 
@@ -36,10 +36,12 @@ detectorMain::~detectorMain()
 void detectorMain::on_beginRecordingButton_clicked()
 {
     int br;
+    bool generateMidi = ui->generateMidiCheckBox->isChecked();
+//    midi_notes.clear();
     ui->beginRecordingButton->setEnabled(false);
     ui->chooseInputDeviceButton->setEnabled(false);
     ui->stopRecordingButton->setEnabled(true);
-    br = rec->begin_recording(inputDeviceID);
+    br = rec->begin_recording(inputDeviceID, generateMidi);
     if(br != paNoError)
     {
         QTextStream(stdout) << "Some Error Occured";
@@ -47,16 +49,33 @@ void detectorMain::on_beginRecordingButton_clicked()
 
 }
 
-void detectorMain::updateNote(std::string note)
+void detectorMain::updateNote(int note)
 {
-    ui->noteLabel->setText(QString::fromStdString(note));
+    if(note != -1)
+    {
+        ui->noteLabel->setText(QString::fromStdString(note_names[note]));
+    }
+    else
+        ui->noteLabel->setText("");
+
+//    midi_notes.push_back(note);
     QCoreApplication::processEvents();
 //    QTextStream(stdout) <<  QString::fromStdString(note) << "\n";
 }
 
 void detectorMain::on_stopRecordingButton_clicked()
 {
+    QTextStream(stdout) << "Stopping Recording\n";
     rec->stop_recording();
+//    midi_notes = rec->get_midi_notes();
+//    QTextStream(stdout) << "Generating Midi\n";
+//    rec->generate_midi(midi_notes, filename);
+//    QTextStream(stdout) << "Midi Saved\n";
+//    QTextStream(stdout) << "Midi Notes: \n";
+//    for (const auto& i : midi_notes)
+//    {
+//        QTextStream(stdout) <<"Note: " << i.first << "\tDuration: " << i.second << "\n";
+//    }
 
     ui->stopRecordingButton->setEnabled(false);
     ui->beginRecordingButton->setEnabled(true);
@@ -70,3 +89,6 @@ void detectorMain::on_chooseInputDeviceButton_clicked()
 //    QTextStream(stdout) << ui->inputDevicesComboBox->currentIndex();
     inputDeviceID = ui->inputDevicesComboBox->currentIndex();
 }
+
+
+

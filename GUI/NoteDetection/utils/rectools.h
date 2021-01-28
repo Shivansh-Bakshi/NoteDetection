@@ -3,9 +3,11 @@
 
 #include "portaudio.h"
 #include "aubio/aubio.h"
+#include "MidiFile.h"
+#include "ui_detectormain.h"
 #include <string>
 #include <QMainWindow>
-#include "ui_detectormain.h"
+#include <utility>
 
 #define SAMPLE_RATE (44100)
 #define FRAMES_PER_BUFFER (4096)
@@ -22,10 +24,23 @@ typedef short SAMPLE;
 #define PERIOD_SIZE_IN_FRAME HOP_SIZE
 
 #define NUM_NOTES (62)          // For Classification
+#define MIDI_KEY_OFFSET (36)    // For saving midi file
+#define BPM (112)               // Beats per minute
 
-#define WINDOW_SIZE (15)        // For rolling mean
+//Tunable Parameters
+#define WINDOW_SIZE (10)        // For rolling mean
+#define CONFIDENCE_THRESH (0.875)
+#define MAXTIME (100)
+//Tunable Parameters
+
+#define WHOLE_NOTE_DURATION (int(60000*4/BPM))
+#define HALF_NOTE_DURATION (int(WHOLE_NOTE_DURATION/2))
+#define QUARTER_NOTE_DURATION (int(HALF_NOTE_DURATION/2))
+#define EIGHTH_NOTE_DURATION (int(QUARTER_NOTE_DURATION/2))
 
 typedef struct paTestData paTestData;
+
+extern std::string note_names[NUM_NOTES];
 
 class Recorder : public QObject
 {
@@ -37,16 +52,17 @@ public:
     int get_device_count();
     PaDeviceInfo get_device_info(int numDevice);
     void stop_recording();
+//    std::vector<std::pair<int, unsigned int>> get_midi_notes();
+//    void generate_midi(std::vector<std::pair<int, unsigned int>>& midi_notes, std::string filename);
 
 public slots:
-    int begin_recording(int deviceID);
-
+    int begin_recording(int deviceID, bool generateMidi);
 
 signals:
-    void UpdateNote(std::string note);
+    void UpdateNote(int note);
 
 private:
-
+    std::vector<std::pair<int, unsigned int>> midi_notes;
 
 };
 
