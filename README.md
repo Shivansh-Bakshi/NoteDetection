@@ -7,4 +7,6 @@ Aside from the third party open source utilies present in utils directory, you n
 ## Build Instructions
 Open the project in Qt Creator using the .pro file and compile from there.
 
-
+# Demonstration  
+[Click this link to YouTube for a demonstration](https://www.youtube.com/watch?v=1x7OmF7IUi8&ab_channel=ShivanshBakshi "Note Detection Demonstration")
+(redirects to https://www.youtube.com/watch?v=1x7OmF7IUi8&ab_channel=ShivanshBakshi)
